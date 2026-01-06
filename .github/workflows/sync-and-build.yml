@@ -1,0 +1,59 @@
+name: Sync Upstream and Build Multi-Arch
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # Roda às 02:00 da manhã para pegar atualizações do dia anterior
+  workflow_dispatch: # Permite rodar manualmente a qualquer momento
+
+jobs:
+  # 1. Sincroniza o seu fork com o original
+  sync:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.sync.outputs.has_new_commits }}
+    steps:
+      - name: Sync Fork
+        id: sync
+        uses: aormsby/fork-sync-action@v3.4
+        with:
+          target_sync_branch: 2.1
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_sync_repo: krayin/laravel-crm
+          upstream_sync_branch: 2.1
+          test_mode: false
+
+  # 2. Faz o build da imagem para ARM e AMD se houver novidades
+  build:
+    needs: sync
+    # O build roda se a sincronização teve sucesso OU se você disparou manualmente
+    if: always() && (needs.sync.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: 2.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/laravel-crm:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/laravel-crm:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
