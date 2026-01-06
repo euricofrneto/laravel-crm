@@ -1,0 +1,24 @@
+name: Sincronizar Fork
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Roda todos os dias à meia-noite
+  workflow_dispatch: # Permite rodar manualmente pelo botão "Run workflow"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do seu fork
+        uses: actions/checkout@v3
+        with:
+          ref: 2.1 # A branch que você está usando (conforme a imagem)
+
+      - name: Sincronizar com o Upstream
+        uses: aormsby/fork-sync-action@v3.4
+        with:
+          target_sync_branch: 2.1
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_sync_repo: krayin/laravel-crm
+          upstream_sync_branch: 2.1
+          test_mode: false
